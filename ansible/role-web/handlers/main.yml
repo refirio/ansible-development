@@ -1,0 +1,14 @@
+- name: restart httpd
+  service: name=httpd state=restarted
+
+- name: restart php-fpm
+  service: name=php-fpm state=restarted
+
+- name: restart multiple-php-fpm
+  service: name=php{{ item.version }}-php-fpm state=restarted
+  with_items:
+    - { version: "70" }
+    - { version: "71" }
+    - { version: "72" }
+    - { version: "73" }
+    - { version: "74" }

@@ -1,0 +1,66 @@
+- name: check mariadb repository
+  stat: path=/etc/yum.repos.d/mariadb.repo
+  register: mariadb_repo
+  tags: mariadb
+
+- block:
+  - name: install mariadb repository
+    shell: curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash
+
+  when: not mariadb_repo.stat.exists
+  tags: mariadb
+
+- name: install mariadb
+  yum:
+    name:
+      - MariaDB-server
+      - MariaDB-client
+      - MySQL-python
+  notify:
+    - restart mariadb
+
+- name: create the configuration file
+  template: src=role-db/templates/main.cnf.j2 dest=/etc/my.cnf.d/main.cnf owner=root group=root mode=0644
+  notify:
+    - restart mariadb
+
+- name: install postgresql
+  yum:
+    name:
+      - postgresql-server
+  notify:
+    - restart postgresql
+
+- name: check postgresql
+  stat: path=/var/lib/pgsql/data/postgresql.conf
+  register: postgresql_conf
+  tags: postgresql
+
+- block:
+  - name: init database
+    shell: service postgresql initdb
+
+  when: not postgresql_conf.stat.exists
+  tags: postgresql
+
+- name: modify postgresql.conf
+  replace:
+    dest: /var/lib/pgsql/data/postgresql.conf
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+  with_items:
+    - { regexp: "#listen_addresses = 'localhost'", replace: "listen_addresses = '*'" }
+    - { regexp: "#log_line_prefix = ''", replace: "log_line_prefix = '%t %u %d '" }
+  notify:
+    - restart postgresql
+
+- name: modify pg_hba.conf
+  template: src=role-db/templates/pg_hba.conf.j2 dest=/var/lib/pgsql/data/pg_hba.conf owner=root group=root mode=0644
+  notify:
+    - restart postgresql
+
+- name: enable autostart for mariadb
+  service: name=mariadb enabled=yes
+
+- name: enable autostart for postgresql
+  service: name=postgresql enabled=yes
